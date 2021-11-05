@@ -33,6 +33,9 @@ String mqttu = "";//mqtt username
 String mqttp = "";//mqtt password
 String ip = "";
 
+double offline_temp = 21.0;
+double offline_hist = 0.2;
+
 String payloadtosend = "";
 
 
@@ -93,6 +96,7 @@ DallasTemperature sensors(&oneWire);
 
 //Callback for mqtt subscribed topic message
 void callback(char* topic, byte* payload, unsigned int length) {
+  String debugmess; //debug
   payload[length] = '\0';
   String payload_string((char*)payload);
   if(payload_string == "open")
@@ -107,9 +111,19 @@ void callback(char* topic, byte* payload, unsigned int length) {
       digitalWrite(OPEN, LOW);
       opened = 0;
       stop.attach(5, stopcb);
+    } else if (payload_string.length() > 9)
+    {
+        if(payload_string.substring(0,9) == "heartbeat")
+        {
+            int pos = payload_string.indexOf(";");
+            offline_temp = payload_string.substring(10, pos).toDouble();
+            offline_hist = payload_string.substring(pos+1).toDouble();
+            debugmess = String(offline_temp) + " " + String(offline_hist); //debug
+        }
     }
     payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
+    mqtt.publish("debug", debugmess.c_str()); //debug
     delay(500);
 }
 
