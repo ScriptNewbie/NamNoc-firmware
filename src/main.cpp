@@ -21,6 +21,8 @@
 #define MQTTTADDR 219 //publish topic
 #define MQTTUADDR 320 //username
 #define MQTTPADDR 409 //password
+#define TEMPADDR 490
+#define HISTADDR 500
 #define EPROMENDADDR 511
 
 
@@ -32,6 +34,8 @@ String mqttt = "";//mqtt NamNoc's Hub topic
 String mqttu = "";//mqtt username
 String mqttp = "";//mqtt password
 String ip = "";
+String offlinetemp = "";
+String offlinehist = "";
 
 double offline_temp = 21.0;
 double offline_hist = 0.2;
@@ -45,6 +49,7 @@ bool softAP = 1; //Soft AP status
 bool opened = 1;
 String mac; //Stores devices MAC ADDRESS
 char macchar[18]; //Stores devices MAC ADDRESS
+int alive = 5;
 
 //Ticker for operations performed every ten secounds - Before first connection to WiFi those operations are performed much more frequently!!!
 Ticker tensec;
@@ -96,7 +101,6 @@ DallasTemperature sensors(&oneWire);
 
 //Callback for mqtt subscribed topic message
 void callback(char* topic, byte* payload, unsigned int length) {
-  String debugmess; //debug
   payload[length] = '\0';
   String payload_string((char*)payload);
   if(payload_string == "open")
@@ -115,21 +119,43 @@ void callback(char* topic, byte* payload, unsigned int length) {
     {
         if(payload_string.substring(0,9) == "heartbeat")
         {
+            alive = 5;
             int pos = payload_string.indexOf(";");
-            offline_temp = payload_string.substring(10, pos).toDouble();
-            offline_hist = payload_string.substring(pos+1).toDouble();
-            debugmess = String(offline_temp) + " " + String(offline_hist); //debug
+            offlinetemp = payload_string.substring(10, pos);
+            double temptemp = offlinetemp.toDouble();
+            offlinehist = payload_string.substring(pos+1);
+            double temphist = offlinehist.toDouble();
+            if(temptemp != offline_temp){
+              offline_temp = temptemp;
+              EEPROM.begin(512);
+              for(unsigned int i = 0; i < offlinetemp.length(); ++i)
+                {
+                  EEPROM.write(TEMPADDR + i, offlinetemp[i]);
+                }
+              EEPROM.write(TEMPADDR + offlinetemp.length(), '\0');
+              EEPROM.end();
+            }
+
+            if(temphist != offline_hist){
+              offline_hist = temphist;
+              EEPROM.begin(512);
+              for(unsigned int i = 0; i < offlinehist.length(); ++i)
+                {
+                  EEPROM.write(HISTADDR + i, offlinehist[i]);
+                }
+              EEPROM.write(HISTADDR + offlinehist.length(), '\0');
+              EEPROM.end();
+            }
         }
     }
     payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
-    mqtt.publish("debug", debugmess.c_str()); //debug
     delay(500);
 }
 
 //Callback for web requests for mainpage - there is configuration form and href to firmware upgrade option.
 void handle_home_page() {
-  String html = "<h3>Settings</h3><form action=\"/settings\" method=\"post\" enctype=\"multipart/form-data\"><label for=\"ssid\">SSID: (currently set - \""+ ssid +"\")</label><br><input type=\"text\" name=\"ssid\"><br><label for=\"wpa\">WiFi Password:</label><br><input type=\"password\" name=\"wpa\"><br><label for=\"mqttserver\">MQTT Broaker address: (currently set - \""+ mqtts +"\")</label><br><input type=\"text\" name=\"mqttserver\"><br><label for=\"mqttport\">MQTT Broaker port (1883 if default, currently set - \""+ mqttport +"\"):</label><br><input type=\"text\" name=\"mqttport\"><br><label for=\"mqtttopic\">MQTT NamNoc's Hub topic: (NamNoc if default, currently set - \""+ mqttt +"\")</label><br><input type=\"text\" name=\"mqtttopic\"><br><label for=\"mqttusername\">MQTT Username: (optional - empty is default, currently set - \""+ mqttu +"\")</label><br><input type=\"text\" name=\"mqttusername\"><br><label for=\"mqttpassword\">MQTT Password: (optional - empty is default)</label><br><input type=\"password\" name=\"mqttpassword\"><br><input type=\"submit\" value=\"Submit\"></form><h3>Firmware upgrade</h3><a href=\"/update\">Firmware upgrade</a>";
+  String html = "<h3>Settings</h3><form action=\"/settings\" method=\"post\" enctype=\"multipart/form-data\"><label for=\"ssid\">SSID: (currently set - \""+ ssid +"\")</label><br><input type=\"text\" name=\"ssid\"><br><label for=\"wpa\">WiFi Password:</label><br><input type=\"password\" name=\"wpa\"><br><label for=\"mqttserver\">MQTT Broaker address: (currently set - \""+ mqtts +"\")</label><br><input type=\"text\" name=\"mqttserver\"><br><label for=\"mqttport\">MQTT Broaker port (1883 if default, currently set - \""+ mqttport +"\"):</label><br><input type=\"number\" name=\"mqttport\"><br><label for=\"mqtttopic\">MQTT NamNoc's Hub topic: (NamNoc if default, currently set - \""+ mqttt +"\")</label><br><input type=\"text\" name=\"mqtttopic\"><br><label for=\"mqttusername\">MQTT Username: (optional - empty is default, currently set - \""+ mqttu +"\")</label><br><input type=\"text\" name=\"mqttusername\"><br><label for=\"mqttpassword\">MQTT Password: (optional - empty is default)</label><br><input type=\"password\" name=\"mqttpassword\"><br><label for=\"temp\">Temperature when offline (is being synced with temperature set on NamNoc Hub, currently set "+ offline_temp +")</label><br><input type=\"number\" step=\"0.01\" name=\"temp\"><br><label for=\"hist\">Hysteresis when offline (is being synced with hysteresis set on NamNoc Hub, currently set "+ offline_hist +")</label><br><input type=\"number\" step=\"0.01\" name=\"hist\"><br><br><input type=\"submit\" value=\"Submit\"></form><h3>Firmware upgrade</h3><a href=\"/update\">Firmware upgrade</a>";
   server.send(200, "text/html", html.c_str());
 }
 
@@ -143,7 +169,10 @@ void handle_settings() {
   String mqttttemp = server.arg(4);
   String mqttutemp = server.arg(5);
   String mqttptemp = server.arg(6);
-  if(server.args() == 7)
+  String temptemp = server.arg(7);
+  String histtemp = server.arg(8);
+  
+  if(server.args() == 9)
   {
     for(unsigned int i = 0; i < ssidtemp.length(); ++i)
     {
@@ -186,6 +215,18 @@ void handle_settings() {
       EEPROM.write(MQTTPADDR + i, mqttptemp[i]);
     }
     EEPROM.write(MQTTPADDR + mqttptemp.length(), '\0');
+
+    for(unsigned int i = 0; i < temptemp.length(); ++i)
+    {
+      EEPROM.write(TEMPADDR + i, temptemp[i]);
+    }
+    EEPROM.write(TEMPADDR + temptemp.length(), '\0');
+    for(unsigned int i = 0; i < histtemp.length(); ++i)
+    {
+      EEPROM.write(HISTADDR + i, histtemp[i]);
+    }
+    EEPROM.write(HISTADDR + histtemp.length(), '\0');
+    
     EEPROM.end();
     server.send(200, "text/html", "It worked! Rebooting now!");
     delay(5000);
@@ -251,12 +292,29 @@ for(int i = MQTTSADDR; i < MQTTPORTADDR-1; ++i)
     mqttu += current;
   }
 
-  for(int i = MQTTPADDR; i < EPROMENDADDR; ++i)
+  for(int i = MQTTPADDR; i < TEMPADDR; ++i)
   {
     current = EEPROM.read(i);
     if(current == '\0') break;
     mqttp += current;
   }
+
+  for(int i = TEMPADDR; i < HISTADDR; ++i)
+  {
+    current = EEPROM.read(i);
+    if(current == '\0') break;
+    offlinetemp += current;
+  }
+  offline_temp = offlinetemp.toDouble();
+
+  for(int i = HISTADDR; i < EPROMENDADDR; ++i)
+  {
+    current = EEPROM.read(i);
+    if(current == '\0') break;
+    offlinehist += current;
+  }
+  offline_hist = offlinehist.toDouble();
+ 
  EEPROM.end();
 
   sensors.begin();
@@ -280,6 +338,7 @@ for(int i = MQTTSADDR; i < MQTTPORTADDR-1; ++i)
   digitalWrite(CLOSE, LOW);
   stop.attach(4, stopcb);
   delay(500);
+  minut.attach(60, minutcb);
 }
 
 void loop() {
@@ -291,8 +350,6 @@ void loop() {
     digitalWrite(OPEN, LOW);
     digitalWrite(CLOSE, LOW);
     stopb = 0;
-
-    mqtt.publish(mqttt.c_str(), "LoL");
   }
 
 //If initial wifi connection is done start the ten second ticker.
@@ -303,7 +360,6 @@ void loop() {
     initb = 0;
     tensecb = 1;
     tensec.attach(10, tenseccb);
-    minut.attach(60, minutcb);
   }
 
 //Operations performed every ten seconds - checking if mqtt connection is fine
@@ -339,6 +395,11 @@ void loop() {
     sensors.requestTemperatures();
     payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
+    if(alive > 0){
+      --alive;
+    } else {
+      //zamknij otwórz zawór;
+    }
   }
 
   server.handleClient();
