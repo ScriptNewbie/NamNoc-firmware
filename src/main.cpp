@@ -393,13 +393,25 @@ void loop() {
   if(minutb){
     minutb = 0;
     sensors.requestTemperatures();
-    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
-    mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
     if(alive > 0){
       --alive;
     } else {
-      //zamknij otwórz zawór;
+      if(opened && sensors.getTempCByIndex(0) > offline_temp + offline_hist)
+      {
+        digitalWrite(CLOSE, LOW);
+        digitalWrite(OPEN, HIGH);
+        opened = 1;
+        stop.attach(4, stopcb);
+      } else if(!opened && sensors.getTempCByIndex(0) < offline_temp - offline_hist)
+      {
+        digitalWrite(CLOSE, HIGH);
+        digitalWrite(OPEN, LOW);
+        opened = 0;
+        stop.attach(5, stopcb);
+      }
     }
+    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
+    mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
   }
 
   server.handleClient();
