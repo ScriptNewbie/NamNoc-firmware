@@ -36,20 +36,20 @@ String mqttp = "";//mqtt password
 String ip = "";
 String offlinetemp = "";
 String offlinehist = "";
-
-double offline_temp = 21.0;
-double offline_hist = 0.2;
-
 String payloadtosend = "";
-
 
 bool sub = 0; //Successfull subscription to mqtt topic. 
 bool connblink = 1; //Blinking bool
 bool softAP = 1; //Soft AP status
 bool opened = 1;
-String mac; //Stores devices MAC ADDRESS
-char macchar[18]; //Stores devices MAC ADDRESS
+String mac; //Stores device's MAC ADDRESS
+char macchar[18]; //Stores device's MAC ADDRESS
 int alive = 5;
+double offline_temp = 21.0;
+double offline_hist = 0.2;
+double temps[3] = {0, 0, 0};
+int tempIndex = 0;
+double lastThreeAvgTemp = 0;
 
 //Ticker for operations performed every ten secounds - Before first connection to WiFi those operations are performed much more frequently!!!
 Ticker tensec;
@@ -146,9 +146,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
               EEPROM.write(HISTADDR + offlinehist.length(), '\0');
               EEPROM.end();
             }
+            return;
         }
     }
-    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
+    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
     delay(500);
 }
@@ -314,6 +315,10 @@ for(int i = MQTTSADDR; i < MQTTPORTADDR-1; ++i)
     offlinehist += current;
   }
   offline_hist = offlinehist.toDouble();
+
+  temps[0] = offline_temp;
+  temps[1] = offline_temp;
+  temps[2] = offline_temp;
  
  EEPROM.end();
 
@@ -360,6 +365,7 @@ void loop() {
     initb = 0;
     tensecb = 1;
     tensec.attach(10, tenseccb);
+    minutb = 1;
   }
 
 //Operations performed every ten seconds - checking if mqtt connection is fine
@@ -393,16 +399,22 @@ void loop() {
   if(minutb){
     minutb = 0;
     sensors.requestTemperatures();
+    temps[tempIndex] = sensors.getTempCByIndex(0);
+    lastThreeAvgTemp = 0;
+    for(int i = 0; i<3; ++i) {
+      lastThreeAvgTemp += temps[i];
+    }
+    lastThreeAvgTemp = lastThreeAvgTemp/3;
     if(alive > 0){
       --alive;
     } else {
-      if(opened && sensors.getTempCByIndex(0) > offline_temp + offline_hist)
+      if(opened && lastThreeAvgTemp > offline_temp + offline_hist)
       {
         digitalWrite(CLOSE, LOW);
         digitalWrite(OPEN, HIGH);
         opened = 1;
         stop.attach(4, stopcb);
-      } else if(!opened && sensors.getTempCByIndex(0) < offline_temp - offline_hist)
+      } else if(!opened && lastThreeAvgTemp < offline_temp - offline_hist)
       {
         digitalWrite(CLOSE, HIGH);
         digitalWrite(OPEN, LOW);
@@ -410,8 +422,9 @@ void loop() {
         stop.attach(5, stopcb);
       }
     }
-    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(sensors.getTempCByIndex(0)) + ", \"opened\":" + opened + "}";
+    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
+    tempIndex = (tempIndex+1)%3;
   }
 
   server.handleClient();
