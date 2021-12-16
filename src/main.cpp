@@ -408,13 +408,13 @@ void loop() {
     if(alive > 0){
       --alive;
     } else {
-      if(opened && lastThreeAvgTemp > offline_temp + offline_hist)
+      if(opened && lastThreeAvgTemp > (offline_temp + offline_hist))
       {
         digitalWrite(CLOSE, LOW);
         digitalWrite(OPEN, HIGH);
         opened = 1;
         stop.attach(4, stopcb);
-      } else if(!opened && lastThreeAvgTemp < offline_temp - offline_hist)
+      } else if(!opened && lastThreeAvgTemp < (offline_temp - offline_hist))
       {
         digitalWrite(CLOSE, HIGH);
         digitalWrite(OPEN, LOW);
