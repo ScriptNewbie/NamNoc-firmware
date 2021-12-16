@@ -250,7 +250,7 @@ void handle_settings() {
 
 void setup() {
   //More initialization staff like, but not limited to, reading parameters from EEPROM, connecting to AP, setting MQTT Broker parameters and so on.
-  pinMode(DETECT, INPUT_PULLUP);
+  pinMode(DETECT, INPUT);
   pinMode(CLOSE, OUTPUT);
   digitalWrite(CLOSE, LOW);
   pinMode(OPEN, OUTPUT);
@@ -421,7 +421,7 @@ void loop() {
         close();
       } else if(!opened && lastThreeAvgTemp < (offline_temp - offline_hist))
       {
-        open()
+        open();
       }
     }
     payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
