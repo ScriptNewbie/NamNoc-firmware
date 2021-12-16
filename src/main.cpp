@@ -99,22 +99,34 @@ ESP8266HTTPUpdateServer httpUpdater;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
+void open()
+{
+  digitalWrite(CLOSE, LOW);
+  digitalWrite(OPEN, HIGH);
+  opened = 1;
+  stop.attach(4, stopcb);
+  delay(500);
+}
+
+void close()
+{
+  digitalWrite(CLOSE, HIGH);
+  digitalWrite(OPEN, LOW);
+  opened = 0;
+  stop.attach(5, stopcb);
+  delay(500);
+}
+
 //Callback for mqtt subscribed topic message
 void callback(char* topic, byte* payload, unsigned int length) {
   payload[length] = '\0';
   String payload_string((char*)payload);
   if(payload_string == "open")
     {
-      digitalWrite(CLOSE, LOW);
-      digitalWrite(OPEN, HIGH);
-      opened = 1;
-      stop.attach(4, stopcb);
+      open();
     } else if(payload_string == "close")
     {
-      digitalWrite(CLOSE, HIGH);
-      digitalWrite(OPEN, LOW);
-      opened = 0;
-      stop.attach(5, stopcb);
+      close();
     } else if (payload_string.length() > 9)
     {
         if(payload_string.substring(0,9) == "heartbeat")
@@ -151,7 +163,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
     payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
-    delay(500);
 }
 
 //Callback for web requests for mainpage - there is configuration form and href to firmware upgrade option.
@@ -339,10 +350,7 @@ for(int i = MQTTSADDR; i < MQTTPORTADDR-1; ++i)
 
   initial.attach(0.5, initcb);
   //Open valve
-  digitalWrite(OPEN, HIGH);
-  digitalWrite(CLOSE, LOW);
-  stop.attach(4, stopcb);
-  delay(500);
+  open();
   minut.attach(60, minutcb);
 }
 
@@ -410,16 +418,10 @@ void loop() {
     } else {
       if(opened && lastThreeAvgTemp > (offline_temp + offline_hist))
       {
-        digitalWrite(CLOSE, LOW);
-        digitalWrite(OPEN, HIGH);
-        opened = 1;
-        stop.attach(4, stopcb);
+        close();
       } else if(!opened && lastThreeAvgTemp < (offline_temp - offline_hist))
       {
-        digitalWrite(CLOSE, HIGH);
-        digitalWrite(OPEN, LOW);
-        opened = 0;
-        stop.attach(5, stopcb);
+        open()
       }
     }
     payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
