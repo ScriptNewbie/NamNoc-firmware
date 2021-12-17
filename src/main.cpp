@@ -8,6 +8,8 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <EEPROM.h>
+#include <ezTime.h>
+
  
 #define ONE_WIRE_BUS 13
 #define OPEN 5
@@ -50,6 +52,7 @@ double offline_hist = 0.2;
 double temps[3] = {0, 0, 0};
 int tempIndex = 0;
 double lastThreeAvgTemp = 0;
+String timeStamp = "";
 
 //Ticker for operations performed every ten secounds - Before first connection to WiFi those operations are performed much more frequently!!!
 Ticker tensec;
@@ -117,6 +120,11 @@ void close()
   delay(500);
 }
 
+String generatePayloadString()
+{
+  return "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"timestamp\":" + timeStamp + ", \"opened\":" + opened + "}";
+}
+
 //Callback for mqtt subscribed topic message
 void callback(char* topic, byte* payload, unsigned int length) {
   payload[length] = '\0';
@@ -161,7 +169,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
             return;
         }
     }
-    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
+    payloadtosend = generatePayloadString();
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
 }
 
@@ -374,6 +382,7 @@ void loop() {
     tensecb = 1;
     tensec.attach(10, tenseccb);
     minutb = 1;
+    waitForSync();
   }
 
 //Operations performed every ten seconds - checking if mqtt connection is fine
@@ -407,6 +416,7 @@ void loop() {
   if(minutb){
     minutb = 0;
     sensors.requestTemperatures();
+    timeStamp = String(UTC.now());
     temps[tempIndex] = sensors.getTempCByIndex(0);
     lastThreeAvgTemp = 0;
     for(int i = 0; i<3; ++i) {
@@ -424,7 +434,7 @@ void loop() {
         open();
       }
     }
-    payloadtosend = "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + opened + "}";
+    payloadtosend = generatePayloadString();
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
     tempIndex = (tempIndex+1)%3;
   }
