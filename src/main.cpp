@@ -39,6 +39,7 @@ String ip = "";
 String offlinetemp = "";
 String offlinehist = "";
 String payloadtosend = "";
+String timeStamp = "0";
 
 bool sub = 0; //Successfull subscription to mqtt topic. 
 bool connblink = 1; //Blinking bool
@@ -52,7 +53,7 @@ double offline_hist = 0.2;
 double temps[3] = {0, 0, 0};
 int tempIndex = 0;
 double lastThreeAvgTemp = 0;
-String timeStamp = "";
+
 
 //Ticker for operations performed every ten secounds - Before first connection to WiFi those operations are performed much more frequently!!!
 Ticker tensec;
