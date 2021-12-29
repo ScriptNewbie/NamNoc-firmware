@@ -439,6 +439,6 @@ void loop() {
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
     tempIndex = (tempIndex+1)%3;
   }
-
+  events();
   server.handleClient();
 }
