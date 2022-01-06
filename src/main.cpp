@@ -15,6 +15,7 @@
 #define OPEN 5
 #define CLOSE 4
 #define DETECT 12
+#define BUTTON 0
 
 #define SSIDADDR 0 //max ssid 32 chars + one for termination \0
 #define WPAADDR 33 //max wpa2 pass 63 chars + one for termination \0
@@ -53,6 +54,7 @@ double offline_hist = 0.2;
 double temps[3] = {0, 0, 0};
 int tempIndex = 0;
 double lastThreeAvgTemp = 0;
+int resetCount = 0;
 
 
 //Ticker for operations performed every ten secounds - Before first connection to WiFi those operations are performed much more frequently!!!
@@ -102,6 +104,24 @@ ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
+
+void factoryReset()
+{
+  blinking.detach();
+  digitalWrite(LED_BUILTIN, LOW);
+  while(!digitalRead(BUTTON))
+  {
+    delay(100);
+  }
+  EEPROM.begin(512);
+  for(int i = 0; i < EPROMENDADDR; ++i)
+  {
+    EEPROM.write(i, '\0');
+  }
+  EEPROM.end();
+  delay(5000);
+  ESP.restart();
+}
 
 void open()
 {
@@ -260,6 +280,7 @@ void handle_settings() {
 void setup() {
   //More initialization staff like, but not limited to, reading parameters from EEPROM, connecting to AP, setting MQTT Broker parameters and so on.
   pinMode(DETECT, INPUT);
+  pinMode(BUTTON, INPUT);
   pinMode(CLOSE, OUTPUT);
   digitalWrite(CLOSE, LOW);
   pinMode(OPEN, OUTPUT);
@@ -383,7 +404,7 @@ void loop() {
     tensecb = 1;
     tensec.attach(10, tenseccb);
     minutb = 1;
-    waitForSync();
+    //waitForSync();
   }
 
 //Operations performed every ten seconds - checking if mqtt connection is fine
@@ -441,4 +462,13 @@ void loop() {
   }
   events();
   server.handleClient();
+
+  while(!digitalRead(BUTTON))
+  {
+    ++resetCount;
+    if(resetCount == 50) factoryReset();
+    delay(100);
+  }
+  resetCount = 0;
+
 }
