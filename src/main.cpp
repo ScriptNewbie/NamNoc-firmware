@@ -48,7 +48,7 @@ bool softAP = 1; //Soft AP status
 bool opened = 1;
 String mac; //Stores device's MAC ADDRESS
 char macchar[18]; //Stores device's MAC ADDRESS
-int alive = 5;
+int alive = 0;
 double offline_temp = 21.0;
 double offline_hist = 0.2;
 double temps[3] = {0, 0, 0};
@@ -56,14 +56,6 @@ int tempIndex = 0;
 double lastThreeAvgTemp = 0;
 int resetCount = 0;
 
-
-//Ticker for operations performed every ten secounds - Before first connection to WiFi those operations are performed much more frequently!!!
-Ticker tensec;
-bool tensecb = 0;
-void tenseccb()
-{
-  tensecb = 1;
-}
 
 //Ticker for operations performed every minute.
 Ticker minut;
@@ -395,44 +387,15 @@ void loop() {
     stopb = 0;
   }
 
-//If initial wifi connection is done start the ten second ticker.
   if(initb)
   {
     initial.detach();
     ip = WiFi.localIP().toString();
     initb = 0;
-    tensecb = 1;
-    tensec.attach(10, tenseccb);
     minutb = 1;
-    //waitForSync();
-  }
-
-//Operations performed every ten seconds - checking if mqtt connection is fine
-  if(tensecb){
-      tensecb = 0;
-      if(mqtt.state())
-      {
-        if(!softAP){
-          WiFi.softAP(mac);
-          softAP = 1;
-          blinking.attach(0.5, blinkingcb);
-        }
-        mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
-        sub = mqtt.subscribe(macchar);
-        tensecb = 1;
-      } else 
-      {
-        if(softAP) {
-          WiFi.softAPdisconnect(1);
-          blinking.detach();
-          digitalWrite(LED_BUILTIN, HIGH);
-          softAP = 0;
-        }
-      }
-      if(!sub) 
-      {
-        sub = mqtt.subscribe(macchar);
-      }
+    mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
+    sub = mqtt.subscribe(macchar);
+    waitForSync();
   }
 
   if(minutb){
@@ -447,7 +410,25 @@ void loop() {
     lastThreeAvgTemp = lastThreeAvgTemp/3;
     if(alive > 0){
       --alive;
+      if(softAP) {
+          WiFi.softAPdisconnect(1);
+          blinking.detach();
+          digitalWrite(LED_BUILTIN, HIGH);
+          softAP = 0;
+        }
     } else {
+      if(!softAP){
+          WiFi.softAP(mac);
+          softAP = 1;
+          blinking.attach(0.5, blinkingcb);
+        }
+
+      if(mqtt.state() != 0)
+      {
+        mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
+        sub = mqtt.subscribe(macchar);
+      } else if(!sub) sub = mqtt.subscribe(macchar);
+
       if(opened && lastThreeAvgTemp > (offline_temp + offline_hist))
       {
         close();
