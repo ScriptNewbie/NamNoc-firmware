@@ -153,6 +153,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
         if(payload_string.substring(0,9) == "heartbeat")
         {
             alive = 5;
+            blinking.detach();
+            digitalWrite(LED_BUILTIN, HIGH);
             int pos = payload_string.indexOf(";");
             offlinetemp = payload_string.substring(10, pos);
             double temptemp = offlinetemp.toDouble();
@@ -408,6 +410,9 @@ void loop() {
       lastThreeAvgTemp += temps[i];
     }
     lastThreeAvgTemp = lastThreeAvgTemp/3;
+    payloadtosend = generatePayloadString();
+    mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
+    tempIndex = (tempIndex+1)%3;
     if(alive > 0){
       --alive;
       if(softAP) {
@@ -420,11 +425,11 @@ void loop() {
       if(!softAP){
           WiFi.softAP(mac);
           softAP = 1;
-          blinking.attach(0.5, blinkingcb);
         }
-
+      blinking.attach(0.5, blinkingcb);
       if(mqtt.state() != 0)
       {
+        blinking.attach(0.2, blinkingcb);
         mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
         sub = mqtt.subscribe(macchar);
       } else if(!sub) sub = mqtt.subscribe(macchar);
@@ -437,9 +442,6 @@ void loop() {
         open();
       }
     }
-    payloadtosend = generatePayloadString();
-    mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
-    tempIndex = (tempIndex+1)%3;
   }
   events();
   server.handleClient();
