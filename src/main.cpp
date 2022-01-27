@@ -19,7 +19,7 @@
 
 #define SSIDADDR 0 //max ssid 32 chars + one for termination \0
 #define WPAADDR 33 //max wpa2 pass 63 chars + one for termination \0
-#define MQTTSADDR 97 //max broaker address 115 chars + one for termination \0
+#define MQTTSADDR 97 //max broker address 115 chars + one for termination \0
 #define MQTTPORTADDR 213 //max port length (chars) 5 + one for termination \0
 #define MQTTTADDR 219 //publish topic
 #define MQTTUADDR 320 //username
@@ -31,7 +31,7 @@
 
 String ssid = ""; //ssid
 String wpa = ""; //wifipassword
-String mqtts = ""; //mqtt broaker address
+String mqtts = ""; //mqtt broker address
 String mqttport = "";//mqtt port
 String mqttt = "";//mqtt NamNoc's Hub topic
 String mqttu = "";//mqtt username
@@ -45,15 +45,15 @@ String timeStamp = "0";
 bool sub = 0; //Successfull subscription to mqtt topic. 
 bool connblink = 1; //Blinking bool
 bool softAP = 1; //Soft AP status
-bool opened = 1;
+bool opened = 1; //Valve status
 String mac; //Stores device's MAC ADDRESS
 char macchar[18]; //Stores device's MAC ADDRESS
-int alive = 0;
+int alive = 0; //Connection with hub status
 double offline_temp = 21.0;
 double offline_hist = 0.2;
 double temps[3] = {0, 0, 0};
 int tempIndex = 0;
-double lastThreeAvgTemp = 0;
+double lastThreeAvgTemp = 0; //Avg of last three measurments
 int resetCount = 0;
 
 
@@ -89,7 +89,7 @@ void blinkingcb()
     connblink = !connblink;
 }
 
-//Some initialisation staff
+//Some initialisation stuff
 WiFiClient wlan;
 PubSubClient mqtt(wlan);
 ESP8266WebServer server(80);
@@ -97,6 +97,7 @@ ESP8266HTTPUpdateServer httpUpdater;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
+//Clearing EEPROM 
 void factoryReset()
 {
   blinking.detach();
@@ -115,6 +116,7 @@ void factoryReset()
   ESP.restart();
 }
 
+//Opeining valve
 void open()
 {
   digitalWrite(CLOSE, LOW);
@@ -124,6 +126,7 @@ void open()
   delay(500);
 }
 
+//Closing valve
 void close()
 {
   digitalWrite(CLOSE, HIGH);
@@ -133,12 +136,13 @@ void close()
   delay(500);
 }
 
+//Generating string to be sent via mqtt
 String generatePayloadString()
 {
   return "{\"id\":\""+ mac +"\", \"ip\":\""+ ip +"\", \"temp\":" + String(lastThreeAvgTemp) + ", \"timestamp\":" + timeStamp + ", \"opened\":" + opened + "}";
 }
 
-//Callback for mqtt subscribed topic message
+//Callback for mqtt subscribed topic messages
 void callback(char* topic, byte* payload, unsigned int length) {
   payload[length] = '\0';
   String payload_string((char*)payload);
@@ -267,12 +271,12 @@ void handle_settings() {
     delay(5000);
     ESP.restart(); //Reset after (hopefully) successfull write to EEPROM
   }
-  server.send(200, "text/html", "Something went wrong! Please <a href=\"/\">go back</a> and try again!"); //Let the user know he did something wrong. Or maybe it's our fault. But we don't need to tell him that :)
+  server.send(200, "text/html", "Something went wrong! Please <a href=\"/\">go back</a> and try again!"); //Let the user know he did something wrong.
 }
 
 
 void setup() {
-  //More initialization staff like, but not limited to, reading parameters from EEPROM, connecting to AP, setting MQTT Broker parameters and so on.
+  //More initialization stuff like, but not limited to, reading parameters from EEPROM, connecting to AP, setting MQTT Broker parameters and so on.
   pinMode(DETECT, INPUT);
   pinMode(BUTTON, INPUT);
   pinMode(CLOSE, OUTPUT);
@@ -389,7 +393,7 @@ void loop() {
     stopb = 0;
   }
 
-  if(initb)
+  if(initb) //When connected to wifi sucessfully 
   {
     initial.detach();
     ip = WiFi.localIP().toString();
@@ -400,6 +404,7 @@ void loop() {
     waitForSync();
   }
 
+//Tasks performed every minute - measuring temperature and publishing MQTT message, also controling connection with hub and decision making when conection lost
   if(minutb){
     minutb = 0;
     sensors.requestTemperatures();
@@ -446,6 +451,7 @@ void loop() {
   events();
   server.handleClient();
 
+//factory reset
   while(!digitalRead(BUTTON))
   {
     ++resetCount;
