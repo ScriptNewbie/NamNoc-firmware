@@ -11,11 +11,9 @@
 #include <ezTime.h>
 
 #include "eePromTools.h"
+#include "valve.h"
 
 #define ONE_WIRE_BUS 13
-#define OPEN 5
-#define CLOSE 4
-#define DETECT 12
 #define BUTTON 0
 
 #define SSIDADDR 0       // max ssid 32 chars + one for termination \0
@@ -28,6 +26,8 @@
 #define TEMPADDR 490
 #define HISTADDR 500
 #define EPROMENDADDR 511
+
+Valve valve;
 
 String ssid = "";     // ssid
 String wpa = "";      // wifipassword
@@ -43,7 +43,6 @@ String timeStamp = "0";
 bool sub = 0;       // Successfull subscription to mqtt topic.
 bool connblink = 1; // Blinking bool
 bool softAP = 1;    // Soft AP status
-bool opened = 1;    // Valve status
 String mac;         // Stores device's MAC ADDRESS
 char macchar[18];   // Stores device's MAC ADDRESS
 int alive = 0;      // Connection with hub status
@@ -71,12 +70,6 @@ void initcb()
 }
 
 // Ticker for stopping motor if detection of rotation end failes.
-Ticker stop;
-bool stopb = 0;
-void stopcb()
-{
-  stopb = 1;
-}
 
 // Ticker for blinking ;)
 Ticker blinking;
@@ -113,30 +106,10 @@ void factoryReset()
   ESP.restart();
 }
 
-// Opeining valve
-void open()
-{
-  digitalWrite(CLOSE, LOW);
-  digitalWrite(OPEN, HIGH);
-  opened = 1;
-  stop.attach(4, stopcb);
-  delay(500);
-}
-
-// Closing valve
-void close()
-{
-  digitalWrite(CLOSE, HIGH);
-  digitalWrite(OPEN, LOW);
-  opened = 0;
-  stop.attach(5, stopcb);
-  delay(500);
-}
-
 // Generating string to be sent via mqtt
 String generatePayloadString()
 {
-  return "{\"id\":\"" + mac + "\", \"ip\":\"" + ip + "\", \"temp\":" + String(lastThreeAvgTemp) + ", \"timestamp\":" + timeStamp + ", \"opened\":" + opened + "}";
+  return "{\"id\":\"" + mac + "\", \"ip\":\"" + ip + "\", \"temp\":" + String(lastThreeAvgTemp) + ", \"timestamp\":" + timeStamp + ", \"opened\":" + valve.isOpened() + "}";
 }
 
 void handleHeartbeatMessage(String message)
@@ -172,11 +145,11 @@ void callback(char *topic, byte *payload, unsigned int length)
 
   if (payload_string == "open")
   {
-    open();
+    valve.open();
   }
   else if (payload_string == "close")
   {
-    close();
+    valve.close();
   }
   else if (payload_string.substring(0, 9) == "heartbeat")
   {
@@ -228,20 +201,8 @@ void handle_settings()
   server.send(200, "text/html", "Something went wrong! Please <a href=\"/\">go back</a> and try again!"); // Let the user know he did something wrong.
 }
 
-void setup()
+void initializeVars()
 {
-  // More initialization stuff like, but not limited to, reading parameters from EEPROM, connecting to AP, setting MQTT Broker parameters and so on.
-  pinMode(DETECT, INPUT);
-  pinMode(BUTTON, INPUT);
-  pinMode(CLOSE, OUTPUT);
-  digitalWrite(CLOSE, LOW);
-  pinMode(OPEN, OUTPUT);
-  digitalWrite(OPEN, LOW);
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  blinking.attach(0.2, blinkingcb);
-
-  delay(500);
   ssid = eepromRead(SSIDADDR, WPAADDR);
   wpa = eepromRead(WPAADDR, MQTTSADDR);
   mqtts = eepromRead(MQTTSADDR, MQTTPORTADDR);
@@ -255,6 +216,18 @@ void setup()
   temps[0] = offline_temp;
   temps[1] = offline_temp;
   temps[2] = offline_temp;
+}
+
+void setup()
+{
+  // More initialization stuff like, but not limited to, reading parameters from EEPROM, connecting to AP, setting MQTT Broker parameters and so on.
+  pinMode(BUTTON, INPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  blinking.attach(0.2, blinkingcb);
+
+  delay(500);
+  initializeVars();
 
   sensors.begin();
   WiFi.begin(ssid.c_str(), wpa.c_str());
@@ -273,7 +246,7 @@ void setup()
 
   initial.attach(0.5, initcb);
   // Open valve
-  open();
+
   minut.attach(60, minutcb);
 }
 
@@ -281,13 +254,7 @@ void loop()
 {
   mqtt.loop();
 
-  if (!digitalRead(DETECT) || stopb) // Stop the motor if end of rotation is detected or emergency ticker ticked.
-  {
-    stop.detach();
-    digitalWrite(OPEN, LOW);
-    digitalWrite(CLOSE, LOW);
-    stopb = 0;
-  }
+  valve.handlEvents();
 
   if (initb) // When connected to wifi sucessfully
   {
@@ -344,13 +311,13 @@ void loop()
       else if (!sub)
         sub = mqtt.subscribe(macchar);
 
-      if (opened && lastThreeAvgTemp > (offline_temp + offline_hist))
+      if (valve.isOpened() && lastThreeAvgTemp > (offline_temp + offline_hist))
       {
-        close();
+        valve.close();
       }
-      else if (!opened && lastThreeAvgTemp < (offline_temp - offline_hist))
+      else if (!valve.isOpened() && lastThreeAvgTemp < (offline_temp - offline_hist))
       {
-        open();
+        valve.open();
       }
     }
   }
