@@ -2,5 +2,5 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 
-String eepromRead(u_int8_t startAddress, u_int8_t endAddress);
-String eepromWrite(u_int8_t startAddress, String value);
+String eepromRead(unsigned int startAddress, unsigned int endAddress);
+String eepromWrite(unsigned int startAddress, String value);
