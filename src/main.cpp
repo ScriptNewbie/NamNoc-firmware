@@ -1,6 +1,5 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
-#include <PubSubClient.h>
 #include <Ticker.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
@@ -10,19 +9,13 @@
 #include "eePromTools.h"
 #include "valve.h"
 #include "temperatureSensor.h"
+#include "mqttClient.h"
 
 
 #define BUTTON 0
 
 #define SSIDADDR 0       // max ssid 32 chars + one for termination \0
 #define WPAADDR 33       // max wpa2 pass 63 chars + one for termination \0
-#define MQTTSADDR 97     // max broker address 115 chars + one for termination \0
-#define MQTTPORTADDR 213 // max port length (chars) 5 + one for termination \0
-#define MQTTTADDR 219    // publish topic
-#define MQTTUADDR 320    // username
-#define MQTTPADDR 409    // password
-#define TEMPADDR 490
-#define HISTADDR 500
 #define EPROMENDADDR 511
 
 Valve valve;
@@ -30,19 +23,12 @@ TemperatureSensor tempSensor;
 
 String ssid = "";     // ssid
 String wpa = "";      // wifipassword
-String mqtts = "";    // mqtt broker address
-String mqttport = ""; // mqtt port
-String mqttt = "";    // mqtt NamNoc's Hub topic
-String mqttu = "";    // mqtt username
-String mqttp = "";    // mqtt password
 String ip = "";
-String payloadtosend = "";
 
 bool sub = 0;       // Successfull subscription to mqtt topic.
 bool connblink = 1; // Blinking bool
 bool softAP = 1;    // Soft AP status
 String mac;         // Stores device's MAC ADDRESS
-char macchar[18];   // Stores device's MAC ADDRESS
 int alive = 0;      // Connection with hub status
 double offline_temp = 21.0;
 double offline_hist = 0.2;
@@ -78,7 +64,8 @@ void blinkingcb()
 
 // Some initialisation stuff
 WiFiClient wlan;
-PubSubClient mqtt(wlan);
+MqttClient mqtt;
+
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
@@ -103,65 +90,17 @@ void factoryReset()
 }
 
 // Generating string to be sent via mqtt
-String generatePayloadString()
-{
-  return "{\"id\":\"" + mac + "\", \"ip\":\"" + ip + "\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + valve.isOpened() + "}";
-}
 
-void handleHeartbeatMessage(String message)
-{
-  alive = 5;
-  blinking.detach();
-  digitalWrite(LED_BUILTIN, HIGH);
 
-  message = message.substring(10);
-  int pos = message.indexOf(";");
-  String offlinetemp = message.substring(0, pos);
-  double temp = offlinetemp.toDouble();
-  String offlinehist = message.substring(pos + 1);
-  double hist = offlinehist.toDouble();
 
-  if (temp != offline_temp)
-  {
-    offline_temp = temp;
-    eepromWrite(TEMPADDR, offlinetemp);
-  }
-
-  if (hist != offline_hist)
-  {
-    offline_hist = hist;
-    eepromWrite(HISTADDR, offlinehist);
-  }
-}
 
 // Callback for mqtt subscribed topic messages
-void callback(char *topic, byte *payload, unsigned int length)
-{
-  payload[length] = '\0';
-  String payload_string((char *)payload);
 
-  if (payload_string == "open")
-  {
-    valve.open();
-  }
-  else if (payload_string == "close")
-  {
-    valve.close();
-  }
-  else if (payload_string.substring(0, 9) == "heartbeat")
-  {
-    handleHeartbeatMessage(payload_string);
-    return;
-  }
-
-  payloadtosend = generatePayloadString();
-  mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
-}
 
 // Callback for web requests for mainpage - there is configuration form and href to firmware upgrade option.
 void handle_home_page()
 {
-  String html = "<h3>Settings</h3><form action=\"/settings\" method=\"post\" enctype=\"multipart/form-data\"><label for=\"ssid\">SSID: (currently set - \"" + ssid + "\")</label><br><input type=\"text\" name=\"ssid\"><br><label for=\"wpa\">WiFi Password:</label><br><input type=\"password\" name=\"wpa\"><br><label for=\"mqttserver\">MQTT Broaker address: (currently set - \"" + mqtts + "\")</label><br><input type=\"text\" name=\"mqttserver\"><br><label for=\"mqttport\">MQTT Broaker port (1883 if default, currently set - \"" + mqttport + "\"):</label><br><input type=\"number\" name=\"mqttport\"><br><label for=\"mqtttopic\">MQTT NamNoc's Hub topic: (NamNoc if default, currently set - \"" + mqttt + "\")</label><br><input type=\"text\" name=\"mqtttopic\"><br><label for=\"mqttusername\">MQTT Username: (optional - empty is default, currently set - \"" + mqttu + "\")</label><br><input type=\"text\" name=\"mqttusername\"><br><label for=\"mqttpassword\">MQTT Password: (optional - empty is default)</label><br><input type=\"password\" name=\"mqttpassword\"><br><label for=\"temp\">Temperature when offline (is being synced with temperature set on NamNoc Hub, currently set " + offline_temp + ")</label><br><input type=\"number\" step=\"0.01\" name=\"temp\"><br><label for=\"hist\">Hysteresis when offline (is being synced with hysteresis set on NamNoc Hub, currently set " + offline_hist + ")</label><br><input type=\"number\" step=\"0.01\" name=\"hist\"><br><br><input type=\"submit\" value=\"Submit\"></form><h3>Firmware upgrade</h3><a href=\"/update\">Firmware upgrade</a>";
+  String html = "<h3>Settings</h3><form action=\"/settings\" method=\"post\" enctype=\"multipart/form-data\"><label for=\"ssid\">SSID: (currently set - \"" + ssid + "\")</label><br><input type=\"text\" name=\"ssid\"><br><label for=\"wpa\">WiFi Password:</label><br><input type=\"password\" name=\"wpa\"><br><label for=\"mqttserver\">MQTT Broaker address: (currently set - \"" + mqtt.getServer() + "\")</label><br><input type=\"text\" name=\"mqttserver\"><br><label for=\"mqttport\">MQTT Broaker port (1883 if default, currently set - \"" + mqtt.getPort() + "\"):</label><br><input type=\"number\" name=\"mqttport\"><br><label for=\"mqtttopic\">MQTT NamNoc's Hub topic: (NamNoc if default, currently set - \"" + mqtt.getTopic() + "\")</label><br><input type=\"text\" name=\"mqtttopic\"><br><label for=\"mqttusername\">MQTT Username: (optional - empty is default, currently set - \"" + mqtt.getUser() + "\")</label><br><input type=\"text\" name=\"mqttusername\"><br><label for=\"mqttpassword\">MQTT Password: (optional - empty is default)</label><br><input type=\"password\" name=\"mqttpassword\"><br><label for=\"temp\">Temperature when offline (is being synced with temperature set on NamNoc Hub, currently set " + offline_temp + ")</label><br><input type=\"number\" step=\"0.01\" name=\"temp\"><br><label for=\"hist\">Hysteresis when offline (is being synced with hysteresis set on NamNoc Hub, currently set " + offline_hist + ")</label><br><input type=\"number\" step=\"0.01\" name=\"hist\"><br><br><input type=\"submit\" value=\"Submit\"></form><h3>Firmware upgrade</h3><a href=\"/update\">Firmware upgrade</a>";
   server.send(200, "text/html", html.c_str());
 }
 
@@ -202,11 +141,6 @@ void initializeVars()
 {
   ssid = eepromRead(SSIDADDR, WPAADDR);
   wpa = eepromRead(WPAADDR, MQTTSADDR);
-  mqtts = eepromRead(MQTTSADDR, MQTTPORTADDR);
-  mqttport = eepromRead(MQTTPORTADDR, MQTTTADDR);
-  mqttt = eepromRead(MQTTTADDR, MQTTUADDR);
-  mqttu = eepromRead(MQTTUADDR, MQTTPADDR);
-  mqttp = eepromRead(MQTTPADDR, TEMPADDR);
   offline_temp = eepromRead(TEMPADDR, HISTADDR).toDouble();
   offline_hist = eepromRead(HISTADDR, EPROMENDADDR).toDouble();
 }
@@ -224,11 +158,9 @@ void setup()
   tempSensor.init();
   WiFi.begin(ssid.c_str(), wpa.c_str());
   mac = WiFi.macAddress();
-  mac.toCharArray(macchar, mac.length() + 1);
   WiFi.softAP(mac);
 
-  mqtt.setServer(mqtts.c_str(), mqttport.toInt());
-  mqtt.setCallback(callback);
+  mqtt.init();  
   httpUpdater.setup(&server);
   MDNS.addService("http", "tcp", 80);
 
@@ -254,8 +186,8 @@ void loop()
     ip = WiFi.localIP().toString();
     initb = 0;
     minutb = 1;
-    mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
-    sub = mqtt.subscribe(macchar);
+    mqtt.connect();
+    sub = mqtt.subscribe();
   }
 
   // Tasks performed every minute - measuring temperature and publishing MQTT message, also controling connection with hub and decision making when conection lost
@@ -264,8 +196,7 @@ void loop()
     minutb = 0;
 
     lastThreeAvgTemp = tempSensor.getTemperature();
-    payloadtosend = generatePayloadString();
-    mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
+    mqtt.publish();
     
     if (alive > 0)
     {
@@ -289,11 +220,11 @@ void loop()
       if (mqtt.state() != 0)
       {
         blinking.attach(0.2, blinkingcb);
-        mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
-        sub = mqtt.subscribe(macchar);
+        mqtt.connect();
+        sub = mqtt.subscribe();
       }
       else if (!sub)
-        sub = mqtt.subscribe(macchar);
+        sub = mqtt.subscribe();
 
       if (valve.isOpened() && lastThreeAvgTemp > (offline_temp + offline_hist))
       {

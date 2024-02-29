@@ -1,3 +1,5 @@
+#pragma once
+
 class Valve
 {
     bool opened = false;
