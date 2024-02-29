@@ -6,7 +6,6 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <EEPROM.h>
-#include <ezTime.h>
 
 #include "eePromTools.h"
 #include "valve.h"
@@ -38,7 +37,6 @@ String mqttu = "";    // mqtt username
 String mqttp = "";    // mqtt password
 String ip = "";
 String payloadtosend = "";
-String timeStamp = "0";
 
 bool sub = 0;       // Successfull subscription to mqtt topic.
 bool connblink = 1; // Blinking bool
@@ -107,7 +105,7 @@ void factoryReset()
 // Generating string to be sent via mqtt
 String generatePayloadString()
 {
-  return "{\"id\":\"" + mac + "\", \"ip\":\"" + ip + "\", \"temp\":" + String(lastThreeAvgTemp) + ", \"timestamp\":" + timeStamp + ", \"opened\":" + valve.isOpened() + "}";
+  return "{\"id\":\"" + mac + "\", \"ip\":\"" + ip + "\", \"temp\":" + String(lastThreeAvgTemp) + ", \"opened\":" + valve.isOpened() + "}";
 }
 
 void handleHeartbeatMessage(String message)
@@ -258,14 +256,13 @@ void loop()
     minutb = 1;
     mqtt.connect(macchar, mqttu.c_str(), mqttp.c_str());
     sub = mqtt.subscribe(macchar);
-    waitForSync();
   }
 
   // Tasks performed every minute - measuring temperature and publishing MQTT message, also controling connection with hub and decision making when conection lost
   if (minutb)
   {
     minutb = 0;
-    timeStamp = String(UTC.now());
+
     lastThreeAvgTemp = tempSensor.getTemperature();
     payloadtosend = generatePayloadString();
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
@@ -308,7 +305,6 @@ void loop()
       }
     }
   }
-  events();
   server.handleClient();
 
   // factory reset
