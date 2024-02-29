@@ -1,8 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <PubSubClient.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include <Ticker.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
@@ -12,8 +10,9 @@
 
 #include "eePromTools.h"
 #include "valve.h"
+#include "temperatureSensor.h"
 
-#define ONE_WIRE_BUS 13
+
 #define BUTTON 0
 
 #define SSIDADDR 0       // max ssid 32 chars + one for termination \0
@@ -28,6 +27,7 @@
 #define EPROMENDADDR 511
 
 Valve valve;
+TemperatureSensor tempSensor;
 
 String ssid = "";     // ssid
 String wpa = "";      // wifipassword
@@ -48,7 +48,6 @@ char macchar[18];   // Stores device's MAC ADDRESS
 int alive = 0;      // Connection with hub status
 double offline_temp = 21.0;
 double offline_hist = 0.2;
-double temps[3] = {0, 0, 0};
 int tempIndex = 0;
 double lastThreeAvgTemp = 0; // Avg of last three measurments
 int resetCount = 0;
@@ -84,8 +83,7 @@ WiFiClient wlan;
 PubSubClient mqtt(wlan);
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
+
 
 // Clearing EEPROM
 void factoryReset()
@@ -213,10 +211,6 @@ void initializeVars()
   mqttp = eepromRead(MQTTPADDR, TEMPADDR);
   offline_temp = eepromRead(TEMPADDR, HISTADDR).toDouble();
   offline_hist = eepromRead(HISTADDR, EPROMENDADDR).toDouble();
-
-  temps[0] = offline_temp;
-  temps[1] = offline_temp;
-  temps[2] = offline_temp;
 }
 
 void setup()
@@ -229,8 +223,7 @@ void setup()
 
   delay(500);
   initializeVars();
-
-  sensors.begin();
+  tempSensor.init();
   WiFi.begin(ssid.c_str(), wpa.c_str());
   mac = WiFi.macAddress();
   mac.toCharArray(macchar, mac.length() + 1);
@@ -272,18 +265,11 @@ void loop()
   if (minutb)
   {
     minutb = 0;
-    sensors.requestTemperatures();
     timeStamp = String(UTC.now());
-    temps[tempIndex] = sensors.getTempCByIndex(0);
-    lastThreeAvgTemp = 0;
-    for (int i = 0; i < 3; ++i)
-    {
-      lastThreeAvgTemp += temps[i];
-    }
-    lastThreeAvgTemp = lastThreeAvgTemp / 3;
+    lastThreeAvgTemp = tempSensor.getTemperature();
     payloadtosend = generatePayloadString();
     mqtt.publish(mqttt.c_str(), payloadtosend.c_str());
-    tempIndex = (tempIndex + 1) % 3;
+    
     if (alive > 0)
     {
       --alive;

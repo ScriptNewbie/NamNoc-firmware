@@ -21,7 +21,8 @@ Valve::Valve()
     pinMode(OPEN, OUTPUT);
     digitalWrite(OPEN, LOW);
     open();
-};
+}
+
 void Valve::open()
 {
     digitalWrite(CLOSE, LOW);
