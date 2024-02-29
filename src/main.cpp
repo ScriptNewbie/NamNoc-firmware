@@ -118,8 +118,9 @@ void handleHeartbeatMessage(String message)
   blinking.detach();
   digitalWrite(LED_BUILTIN, HIGH);
 
+  message = message.substring(10);
   int pos = message.indexOf(";");
-  String offlinetemp = message.substring(10, pos);
+  String offlinetemp = message.substring(0, pos);
   double temp = offlinetemp.toDouble();
   String offlinehist = message.substring(pos + 1);
   double hist = offlinehist.toDouble();
