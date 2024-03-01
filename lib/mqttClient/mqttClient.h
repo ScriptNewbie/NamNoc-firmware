@@ -26,7 +26,6 @@ private:
     String user = "";    // mqtt username
     String password = "";    // mqtt password
     void callback(char *topic, byte *payload, unsigned int length);
-    void handleHeartbeatMessage(String payload);
 
 public:
     MqttClient() : mqtt(wlan){};
