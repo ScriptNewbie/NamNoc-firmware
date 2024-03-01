@@ -1,7 +1,6 @@
 
 #include "mqttClient.h"
 #include <Ticker.h>
-#include <WiFiClient.h>
 
 #include "valve.h"
 
@@ -12,7 +11,6 @@ extern double offline_temp;
 extern double offline_hist;
 extern int alive;
 extern Ticker blinking;
-extern WiFiClient wlan;
 extern Valve valve;
 
 String generatePayloadString()
@@ -68,10 +66,6 @@ void MqttClient::callback(char *topic, byte *payload, unsigned int length)
   publish();
 }
 
-MqttClient::MqttClient()
-{
-    mqtt = PubSubClient(wlan);
-}
 
 void MqttClient::init()
 {

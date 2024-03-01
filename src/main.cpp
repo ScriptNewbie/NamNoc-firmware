@@ -1,5 +1,4 @@
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <Ticker.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
@@ -63,7 +62,6 @@ void blinkingcb()
 }
 
 // Some initialisation stuff
-WiFiClient wlan;
 MqttClient mqtt;
 
 ESP8266WebServer server(80);

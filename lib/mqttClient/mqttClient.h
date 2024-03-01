@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <PubSubClient.h>
+#include <WiFiClient.h>
 
 #include "eePromTools.h"
 #include "temperatureSensor.h"
@@ -17,6 +18,7 @@
 class MqttClient
 {
 private:
+    WiFiClient wlan;
     PubSubClient mqtt;
     String server = "";    // mqtt broker address
     String port = ""; // mqtt port
@@ -27,7 +29,7 @@ private:
     void handleHeartbeatMessage(String payload);
 
 public:
-    MqttClient();
+    MqttClient() : mqtt(wlan){};
     void init();
     void publish();
     String getServer();
