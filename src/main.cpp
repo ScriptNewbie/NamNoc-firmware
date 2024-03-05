@@ -33,7 +33,6 @@ int alive = 0;      // Connection with hub status
 
 double offline_temp = 21.0;
 double offline_hist = 0.2;
-int tempIndex = 0;
 double lastThreeAvgTemp = 0; // Avg of last three measurments
 
 // Ticker for operations performed every minute.
