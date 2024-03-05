@@ -10,30 +10,31 @@
 #include "temperatureSensor.h"
 #include "mqttClient.h"
 
-
 #define BUTTON 0
 
-#define SSIDADDR 0       // max ssid 32 chars + one for termination \0
-#define WPAADDR 33       // max wpa2 pass 63 chars + one for termination \0
+#define SSIDADDR 0 // max ssid 32 chars + one for termination \0
+#define WPAADDR 33 // max wpa2 pass 63 chars + one for termination \0
 #define EPROMENDADDR 511
 
+MqttClient mqtt;
+ESP8266WebServer server(80);
+ESP8266HTTPUpdateServer httpUpdater;
 Valve valve;
 TemperatureSensor tempSensor;
 
-String ssid = "";     // ssid
-String wpa = "";      // wifipassword
-
+String ssid = "";
+String wpa = "";
+String mac;
 
 bool sub = 0;       // Successfull subscription to mqtt topic.
 bool connblink = 1; // Blinking bool
 bool softAP = 1;    // Soft AP status
-String mac;         // Stores device's MAC ADDRESS
 int alive = 0;      // Connection with hub status
+
 double offline_temp = 21.0;
 double offline_hist = 0.2;
 int tempIndex = 0;
 double lastThreeAvgTemp = 0; // Avg of last three measurments
-int resetCount = 0;
 
 // Ticker for operations performed every minute.
 Ticker minut;
@@ -51,8 +52,6 @@ void initcb()
   initb = WiFi.status() == WL_CONNECTED;
 }
 
-// Ticker for stopping motor if detection of rotation end failes.
-
 // Ticker for blinking ;)
 Ticker blinking;
 void blinkingcb()
@@ -60,13 +59,6 @@ void blinkingcb()
   digitalWrite(LED_BUILTIN, connblink);
   connblink = !connblink;
 }
-
-// Some initialisation stuff
-MqttClient mqtt;
-
-ESP8266WebServer server(80);
-ESP8266HTTPUpdateServer httpUpdater;
-
 
 // Clearing EEPROM
 void factoryReset()
@@ -86,14 +78,6 @@ void factoryReset()
   delay(5000);
   ESP.restart();
 }
-
-// Generating string to be sent via mqtt
-
-
-
-
-// Callback for mqtt subscribed topic messages
-
 
 // Callback for web requests for mainpage - there is configuration form and href to firmware upgrade option.
 void handle_home_page()
@@ -158,7 +142,7 @@ void setup()
   mac = WiFi.macAddress();
   WiFi.softAP(mac);
 
-  mqtt.init();  
+  mqtt.init();
   httpUpdater.setup(&server);
   MDNS.addService("http", "tcp", 80);
 
@@ -167,16 +151,14 @@ void setup()
   server.begin();
 
   initial.attach(0.5, initcb);
-  // Open valve
-
   minut.attach(60, minutcb);
 }
 
 void loop()
 {
   mqtt.loop();
-
   valve.handlEvents();
+  server.handleClient();
 
   if (initb) // When connected to wifi sucessfully
   {
@@ -194,7 +176,7 @@ void loop()
 
     lastThreeAvgTemp = tempSensor.getTemperature();
     mqtt.publish();
-    
+
     if (alive > 0)
     {
       --alive;
@@ -233,9 +215,9 @@ void loop()
       }
     }
   }
-  server.handleClient();
 
   // factory reset
+  int resetCount = 0;
   while (!digitalRead(BUTTON))
   {
     ++resetCount;
@@ -243,5 +225,4 @@ void loop()
       factoryReset();
     delay(100);
   }
-  resetCount = 0;
 }
