@@ -4,3 +4,4 @@
 
 String eepromRead(unsigned int startAddress, unsigned int endAddress);
 String eepromWrite(unsigned int startAddress, String value);
+void clearEeprom();

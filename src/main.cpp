@@ -61,22 +61,26 @@ void blinkingcb()
 }
 
 // Clearing EEPROM
-void factoryReset()
+void handleFactoryReset()
 {
-  blinking.detach();
-  digitalWrite(LED_BUILTIN, LOW);
-  while (!digitalRead(BUTTON))
+  int resetCount = 0;
+  while (!digitalRead(BUTTON)) //When button is pressed
   {
+    ++resetCount;
+    if (resetCount == 50)
+    {
+      blinking.detach();
+      digitalWrite(LED_BUILTIN, LOW);
+      while (!digitalRead(BUTTON)) //Wait for button release
+      {
+        delay(100);
+      }
+      clearEeprom();
+      delay(5000);
+      ESP.restart();
+    }
     delay(100);
   }
-  EEPROM.begin(512);
-  for (int i = 0; i < EPROMENDADDR; ++i)
-  {
-    EEPROM.write(i, '\0');
-  }
-  EEPROM.end();
-  delay(5000);
-  ESP.restart();
 }
 
 // Callback for web requests for mainpage - there is configuration form and href to firmware upgrade option.
@@ -156,6 +160,7 @@ void setup()
 
 void loop()
 {
+  handleFactoryReset();
   mqtt.loop();
   valve.handlEvents();
   server.handleClient();
@@ -214,15 +219,5 @@ void loop()
         valve.open();
       }
     }
-  }
-
-  // factory reset
-  int resetCount = 0;
-  while (!digitalRead(BUTTON))
-  {
-    ++resetCount;
-    if (resetCount == 50)
-      factoryReset();
-    delay(100);
   }
 }
