@@ -22,7 +22,7 @@ TemperatureSensor tempSensor;
 
 String ssid = "";     // ssid
 String wpa = "";      // wifipassword
-String ip = "";
+
 
 bool sub = 0;       // Successfull subscription to mqtt topic.
 bool connblink = 1; // Blinking bool
@@ -181,7 +181,6 @@ void loop()
   if (initb) // When connected to wifi sucessfully
   {
     initial.detach();
-    ip = WiFi.localIP().toString();
     initb = 0;
     minutb = 1;
     mqtt.connect();

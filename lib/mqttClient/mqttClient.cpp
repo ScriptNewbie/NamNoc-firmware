@@ -1,12 +1,12 @@
 
 #include "mqttClient.h"
 #include <Ticker.h>
+#include <ESP8266WiFi.h>
 
 #include "valve.h"
 
 extern double lastThreeAvgTemp;
 extern String mac;
-extern String ip;
 extern double offline_temp;
 extern double offline_hist;
 extern int alive;
@@ -94,6 +94,7 @@ String MqttClient::getUser()
 
 void MqttClient::connect()
 {
+  ip = WiFi.localIP().toString();
   mqtt.connect(mac.c_str(), user.c_str(), password.c_str());
 }
 

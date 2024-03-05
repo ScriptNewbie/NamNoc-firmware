@@ -20,6 +20,7 @@ class MqttClient
 private:
     WiFiClient wlan;
     PubSubClient mqtt;
+    String ip = "";
     String server = "";    // mqtt broker address
     String port = ""; // mqtt port
     String topic = "";    
